@@ -42,6 +42,18 @@ enum ClaudeAccountLimitsTests {
             let tiles = NotchAgentSupport.tiles(cards: [.limits], providers: [.claude], claudeAccounts: profiles.map(\.id))
             suite.expect(tiles.map(\.accountID) == profiles.map(\.id), "Each Claude profile has a limits card")
 
+            // Spend is measured against what the shown accounts cost together.
+            try Data(#"{"oauthAccount":{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_5x"}}"#.utf8)
+                .write(to: home.appending(path: ".claude-work/.claude.json"))
+            try Data(#"{"oauthAccount":{"organizationType":"claude_pro"}}"#.utf8).write(to: home.appending(path: ".claude.json"))
+            let plans = profiles.compactMap { ClaudeAccountProfile.plan($0, home: home) }
+            suite.expect(plans.map(\.monthlyPrice) == [20, 100], "Each Claude profile's plan is read from its own .claude.json")
+            let combined = ClaudeAccountProfile.combined(plans + [AgentPlan(name: "Team", monthlyPrice: nil)])
+            suite.expect(combined?.monthlyPrice == 120 && combined?.name.contains(" + ") == true,
+                         "Claude plans combine at the sum of their known prices")
+            suite.expect(ClaudeAccountProfile.combined([AgentPlan(name: "Team", monthlyPrice: nil)]) == nil,
+                         "Plans without a known price give no multiple")
+
             hiding(suite, profiles: profiles)
         } catch { suite.expect(false, "Claude account contract: \(error)") }
         strings(suite)

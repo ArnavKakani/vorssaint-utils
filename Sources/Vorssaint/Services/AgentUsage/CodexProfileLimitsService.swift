@@ -44,6 +44,9 @@ final class CodexProfileLimitsService: ObservableObject {
     static let shared = CodexProfileLimitsService()
 
     @Published private(set) var states: [CodexProfileLimitsState] = []
+    /// The shown Claude Code profiles' plans together, which spend is measured
+    /// against in place of the one plan in `~/.claude.json`; nil without profiles.
+    @Published private(set) var claudePlan: AgentPlan?
     /// Asks the due homes again while the page shows any; nil otherwise.
     private(set) var timer: Timer?
 
@@ -97,6 +100,8 @@ final class CodexProfileLimitsService: ObservableObject {
         let claude = NotchAgentSupport.showsClaudeAccounts(in: defaults)
             ? claudeProfiles().filter { !hidden.contains($0.id) } : []
         let wanted = codex + claude
+        let plan = ClaudeAccountProfile.combined(claude.compactMap { ClaudeAccountProfile.plan($0) })
+        if claudePlan != plan { claudePlan = plan }
         if states.map(\.profile) != wanted {
             let previous = states
             states = wanted.map { profile in

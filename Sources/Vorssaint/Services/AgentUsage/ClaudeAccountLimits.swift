@@ -96,7 +96,7 @@ enum ClaudeAccountProfile {
         }
 
         switch AgentClaudeServer.Request().run(executable, home: config, environment: environment) {
-        case .success(let summary): return .success(CodexAccountReading(limits: summary.limits, plan: plan(config)))
+        case .success(let summary): return .success(CodexAccountReading(limits: summary.limits, plan: plan(profile, home: home)?.name))
         case .failure(.missing): return .failure(.missingCLI)
         case .failure(.needsSignIn): return .failure(.needsSignIn)
         case .failure(.outdated): return .failure(.outdated)
@@ -104,13 +104,23 @@ enum ClaudeAccountProfile {
         }
     }
 
-    /// The plan name from the profile's `.claude.json`, as the provider card reads it.
-    private static func plan(_ config: URL) -> String? {
+    /// The plan in the profile's `.claude.json`, read as the provider card reads it.
+    static func plan(_ profile: CodexAccountProfile, home: URL = FileManager.default.homeDirectoryForCurrentUser) -> AgentPlan? {
+        let config = configHome(profile, home: home)
         guard let data = try? Data(contentsOf: config.appending(path: ".claude.json"), options: .mappedIfSafe),
               let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let account = json["oauthAccount"] as? [String: Any] else { return nil }
         return AgentPlans.claude(organizationType: account["organizationType"] as? String,
                                  rateLimitTier: account["organizationRateLimitTier"] as? String
-                                    ?? account["userRateLimitTier"] as? String)?.name
+                                    ?? account["userRateLimitTier"] as? String)
+    }
+
+    /// The plans of several profiles as one, for value against what they cost
+    /// together: "Max 5× + Pro" at the sum of their known monthly prices. Nil
+    /// when no plan has a known price.
+    static func combined(_ plans: [AgentPlan]) -> AgentPlan? {
+        let priced = plans.compactMap(\.monthlyPrice)
+        guard !priced.isEmpty else { return nil }
+        return AgentPlan(name: plans.map(\.name).joined(separator: " + "), monthlyPrice: priced.reduce(0, +))
     }
 }

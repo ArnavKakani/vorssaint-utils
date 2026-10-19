@@ -124,7 +124,8 @@ struct NotchAgentsView: View {
                                      account: account(tile, now: now))
             }
         case .spend:
-            NotchAgentSpendCard(snapshot: snapshot, providers: providers, period: shown, text: text)
+            NotchAgentSpendCard(snapshot: snapshot, providers: providers, period: shown, text: text,
+                                claudePlan: claudeAccounts.isEmpty ? nil : accounts.claudePlan)
         case .live:
             NotchAgentLiveCard(snapshot: snapshot, providers: providers, text: text)
         case .trend:
@@ -477,6 +478,8 @@ private struct NotchAgentSpendCard: View {
     let providers: [AgentProvider]
     let period: AgentPeriod
     let text: NotchAgentStrings
+    /// With Claude Code profiles, their plans together replace the one in `~/.claude.json`.
+    var claudePlan: AgentPlan? = nil
 
     var body: some View {
         let usage = snapshot.usage(period)
@@ -514,7 +517,8 @@ private struct NotchAgentSpendCard: View {
     @ViewBuilder private func multiples(_ usage: AgentPeriodUsage) -> some View {
         HStack(spacing: 3) {
             ForEach(providers) { provider in
-                if let plan = snapshot.plans[provider], let price = plan.monthlyPrice, price > 0,
+                if let plan = (provider == .claude ? claudePlan : nil) ?? snapshot.plans[provider],
+                   let price = plan.monthlyPrice, price > 0,
                    let spent = usage.byProvider[provider]?.cost, spent > 0 {
                     let multiple = (spent / price).formatted(.number.precision(.fractionLength(spent / price < 10 ? 1 : 0))) + "×"
                     NotchAgentChip(text: multiple, tint: provider.tint)
