@@ -26,7 +26,13 @@ struct NotchAgentsView: View {
     /// card's place, so none while that card is hidden.
     private var codexAccounts: [CodexProfileLimitsState] {
         _ = (codex, hiddenCards)
-        return NotchAgentSupport.showsCodexAccounts() ? accounts.states : []
+        return NotchAgentSupport.showsCodexAccounts() ? accounts.states.filter { !$0.profile.isClaude } : []
+    }
+
+    /// Each Claude Code profile on this Mac, once there is more than `~/.claude`.
+    private var claudeAccounts: [CodexProfileLimitsState] {
+        _ = (claude, hiddenCards)
+        return NotchAgentSupport.showsClaudeAccounts() ? accounts.states.filter { $0.profile.isClaude } : []
     }
 
     /// Only agents that left something on this Mac, or whose accounts were
@@ -40,7 +46,8 @@ struct NotchAgentsView: View {
         // The strings are read here so a change in Settings redraws the page.
         _ = (cardOrder, hiddenCards)
         return NotchAgentSupport.rows(NotchAgentSupport.tiles(cards: NotchAgentSupport.cards(), providers: providers,
-                                                              codexAccounts: codexAccounts.map(\.id)),
+                                                              codexAccounts: codexAccounts.map(\.id),
+                                                              claudeAccounts: claudeAccounts.map(\.id)),
                                       width: size.width)
     }
 
@@ -136,14 +143,16 @@ struct NotchAgentsView: View {
     }
 
     private func account(_ tile: NotchAgentTile, now: Date) -> NotchAgentAccount? {
-        guard let id = tile.accountID, let state = codexAccounts.first(where: { $0.id == id }) else { return nil }
+        guard let id = tile.accountID,
+              let state = (codexAccounts + claudeAccounts).first(where: { $0.id == id }) else { return nil }
         let strings = FeatureStrings.codexAccounts(l10n.language)
+        let isClaude = state.profile.isClaude
         let failure = state.failure.map { failure -> String in
             switch failure {
-            case .missingCLI: return text.resetsNeedCodex
+            case .missingCLI: return isClaude ? text.claudeCodeMissing : text.resetsNeedCodex
             case .invalidProfile: return strings.folderProblem
-            case .needsSignIn: return strings.signIn
-            case .outdated: return strings.update
+            case .needsSignIn: return isClaude ? text.claudeCodeSignedOut : strings.signIn
+            case .outdated: return isClaude ? text.claudeCodeOutdated : strings.update
             case .unavailable, .cancelled: return strings.failed
             }
         }
