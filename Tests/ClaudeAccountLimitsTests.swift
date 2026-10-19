@@ -41,6 +41,41 @@ enum ClaudeAccountLimitsTests {
 
             let tiles = NotchAgentSupport.tiles(cards: [.limits], providers: [.claude], claudeAccounts: profiles.map(\.id))
             suite.expect(tiles.map(\.accountID) == profiles.map(\.id), "Each Claude profile has a limits card")
+
+            hiding(suite, profiles: profiles)
         } catch { suite.expect(false, "Claude account contract: \(error)") }
+        strings(suite)
+    }
+
+    private static func hiding(_ suite: TestSuite, profiles: [CodexAccountProfile]) {
+        let domain = "com.vorssaint.tests.claude-accounts." + UUID().uuidString
+        guard let defaults = UserDefaults(suiteName: domain) else { return suite.expect(false, "Claude account defaults") }
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let service = CodexProfileLimitsService(defaults: defaults, reader: { _, _, _ in .failure(.unavailable) },
+                                                claudeProfiles: { profiles })
+        service.synchronize()
+        suite.expect(service.states.map(\.id) == profiles.map(\.id), "Every Claude profile shows while none is hidden")
+
+        ClaudeAccountProfile.setHidden(true, id: ClaudeAccountProfile.defaultID, in: defaults)
+        service.synchronize()
+        suite.expect(service.states.map(\.id) == profiles.dropFirst().map(\.id), "A hidden Claude profile loses its card")
+
+        ClaudeAccountProfile.setHidden(false, id: ClaudeAccountProfile.defaultID, in: defaults)
+        service.synchronize()
+        suite.expect(service.states.map(\.id) == profiles.map(\.id), "Turning a Claude profile back on restores its card")
+
+        let payload: [String: Any] = [SettingsBackupSupport.formatVersionKey: 1,
+            SettingsBackupSupport.settingsKey: [DefaultsKey.notchAgentsHiddenClaudeProfiles: ClaudeAccountProfile.defaultID]]
+        suite.expect(!SettingsBackupSupport.exportKeys().contains(DefaultsKey.notchAgentsHiddenClaudeProfiles)
+                        && SettingsBackupSupport.sanitizedSettings(from: payload)?[DefaultsKey.notchAgentsHiddenClaudeProfiles] == nil,
+                     "Hidden Claude profiles, folders on this Mac, stay out of settings backups")
+    }
+
+    private static func strings(_ suite: TestSuite) {
+        for language in AppLanguage.allCases {
+            let text = FeatureStrings.claudeAccounts(language)
+            suite.expect(!text.title.isEmpty && text.explanation.contains("~/.claude-work"),
+                         "Claude account settings are translated for \(language.rawValue)")
+        }
     }
 }

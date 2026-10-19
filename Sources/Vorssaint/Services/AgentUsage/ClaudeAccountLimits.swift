@@ -49,6 +49,18 @@ enum ClaudeAccountProfile {
         return profiles
     }
 
+    /// The ids of the profiles the person turned off in Settings.
+    static func hiddenIDs(in defaults: UserDefaults = .standard) -> Set<String> {
+        Set((defaults.string(forKey: DefaultsKey.notchAgentsHiddenClaudeProfiles) ?? "")
+            .split(separator: ",").map(String.init))
+    }
+
+    static func setHidden(_ hidden: Bool, id: String, in defaults: UserDefaults = .standard) {
+        var ids = hiddenIDs(in: defaults)
+        if hidden { ids.insert(id) } else { ids.remove(id) }
+        defaults.set(ids.sorted().joined(separator: ","), forKey: DefaultsKey.notchAgentsHiddenClaudeProfiles)
+    }
+
     /// The folder that holds the profile's `.claude.json`: the home folder
     /// for the usual profile, the profile's own folder for the others.
     static func configHome(_ profile: CodexAccountProfile, home: URL) -> URL {

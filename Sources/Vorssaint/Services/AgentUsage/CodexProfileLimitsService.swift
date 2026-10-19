@@ -93,7 +93,9 @@ final class CodexProfileLimitsService: ObservableObject {
     func synchronize() {
         if !isEnabled { cancelChecks() }
         let codex = CodexAccountProfile.decode(defaults.string(forKey: DefaultsKey.notchAgentsCodexProfiles) ?? "")
-        let claude = NotchAgentSupport.showsClaudeAccounts(in: defaults) ? claudeProfiles() : []
+        let hidden = ClaudeAccountProfile.hiddenIDs(in: defaults)
+        let claude = NotchAgentSupport.showsClaudeAccounts(in: defaults)
+            ? claudeProfiles().filter { !hidden.contains($0.id) } : []
         let wanted = codex + claude
         if states.map(\.profile) != wanted {
             let previous = states
